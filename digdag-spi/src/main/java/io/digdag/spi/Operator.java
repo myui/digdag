@@ -2,9 +2,11 @@ package io.digdag.spi;
 
 import com.google.common.collect.ImmutableList;
 
+import java.io.Closeable;
 import java.util.List;
 
 public interface Operator
+        extends Closeable
 {
     // TODO: scrap backwards compatibility?
     @Deprecated
@@ -27,4 +29,7 @@ public interface Operator
     {
         return ImmutableList.of();
     }
+
+    default void close()
+    { }
 }

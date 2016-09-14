@@ -26,10 +26,17 @@ public abstract class BaseOperator
     public BaseOperator(Path projectPath, TaskRequest request)
     {
         this.projectPath = projectPath;
-        this.workspace = Workspace.ofTaskRequest(projectPath, request);
         this.request = request;
         this.inputs = new ArrayList<>();
         this.outputs = new ArrayList<>();
+
+        this.workspace = Workspace.ofTaskRequest(projectPath, request);
+    }
+
+    @Override
+    public void close()
+    {
+        workspace.close();
     }
 
     public void addInput(Config input)
@@ -47,12 +54,7 @@ public abstract class BaseOperator
     {
         RetryControl retry = RetryControl.prepare(request.getConfig(), request.getLastStateParams(), false);
         try {
-            try {
-                return runTask(ctx);
-            }
-            finally {
-                workspace.close();
-            }
+            return runTask(ctx);
         }
         catch (RuntimeException ex) {
             // Propagate polling TaskExecutionException instances

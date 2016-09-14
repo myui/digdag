@@ -274,30 +274,30 @@ public class OperatorManager
             throw new ConfigException("Unknown task type: " + type);
         }
 
-        Operator operator = factory.newOperator(projectPath, mergedRequest);
+        try (Operator operator = factory.newOperator(projectPath, mergedRequest)) {
+            SecretStore secretStore = secretStoreManager.getSecretStore(mergedRequest.getSiteId());
 
-        SecretStore secretStore = secretStoreManager.getSecretStore(mergedRequest.getSiteId());
+            Config grants = mergedRequest.getConfig().getNestedOrGetEmpty("_secrets");
 
-        Config grants = mergedRequest.getConfig().getNestedOrGetEmpty("_secrets");
+            SecretFilter operatorSecretFilter = SecretFilter.of(
+                    operator.secretSelectors().stream().map(SecretSelector::of).collect(Collectors.toList()));
 
-        SecretFilter operatorSecretFilter = SecretFilter.of(
-                operator.secretSelectors().stream().map(SecretSelector::of).collect(Collectors.toList()));
+            SecretAccessContext secretContext = SecretAccessContext.builder()
+                    .siteId(mergedRequest.getSiteId())
+                    .projectId(mergedRequest.getProjectId())
+                    .revision(mergedRequest.getRevision().get())
+                    .workflowName(mergedRequest.getWorkflowName())
+                    .taskName(mergedRequest.getTaskName())
+                    .operatorType(type)
+                    .build();
 
-        SecretAccessContext secretContext = SecretAccessContext.builder()
-                .siteId(mergedRequest.getSiteId())
-                .projectId(mergedRequest.getProjectId())
-                .revision(mergedRequest.getRevision().get())
-                .workflowName(mergedRequest.getWorkflowName())
-                .taskName(mergedRequest.getTaskName())
-                .operatorType(type)
-                .build();
+            DefaultSecretProvider secretProvider = new DefaultSecretProvider(
+                    secretContext, secretAccessPolicy, grants, operatorSecretFilter, secretStore);
 
-        DefaultSecretProvider secretProvider = new DefaultSecretProvider(
-                secretContext, secretAccessPolicy, grants, operatorSecretFilter, secretStore);
+            TaskExecutionContext taskExecutionContext = new DefaultTaskExecutionContext(secretProvider);
 
-        TaskExecutionContext taskExecutionContext = new DefaultTaskExecutionContext(secretProvider);
-
-        return operator.run(taskExecutionContext);
+            return operator.run(taskExecutionContext);
+        }
     }
 
     private void heartbeat()
