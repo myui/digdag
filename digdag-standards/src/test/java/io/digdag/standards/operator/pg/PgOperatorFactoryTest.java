@@ -42,7 +42,8 @@ public class PgOperatorFactoryTest
                 "database", "database0"
         );
         TaskRequest taskRequest = testHelper.createTaskRequest(configInput, Optional.absent());
-        Operator operator = operatorFactory.newOperator(testHelper.projectPath(), taskRequest);
-        assertThat(operator, is(instanceOf(PgOperatorFactory.PgOperator.class)));
+        try (Operator operator = operatorFactory.newOperator(testHelper.projectPath(), taskRequest)) {
+            assertThat(operator, is(instanceOf(PgOperatorFactory.PgOperator.class)));
+        }
     }
 }
