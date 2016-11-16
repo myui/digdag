@@ -200,7 +200,7 @@ public abstract class AbstractJdbcOperator <C>
         }
         catch (DatabaseException ex) {
             // expected error that should suppress stacktrace by default
-            String message = ex.getMessage();
+            String message = String.format("%s [%s]", ex.getMessage(), ex.getCause().getMessage());
             throw new TaskExecutionException(message, buildExceptionErrorConfig(ex));
         }
     }
