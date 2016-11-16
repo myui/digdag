@@ -8,6 +8,9 @@ import io.digdag.spi.SecretProvider;
 import io.digdag.spi.TaskRequest;
 import io.digdag.spi.TemplateEngine;
 import io.digdag.standards.operator.jdbc.AbstractJdbcOperator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.file.Path;
 
 public class RedshiftOperatorFactory
@@ -36,6 +39,8 @@ public class RedshiftOperatorFactory
     public static class RedshiftOperator
         extends AbstractJdbcOperator<RedshiftConnectionConfig>
     {
+        private final Logger logger = LoggerFactory.getLogger(getClass());
+
         public RedshiftOperator(Path projectPath, TaskRequest request, TemplateEngine templateEngine)
         {
             super(projectPath, request, templateEngine);
@@ -57,6 +62,16 @@ public class RedshiftOperatorFactory
         protected String type()
         {
             return OPERATOR_TYPE;
+        }
+
+        @Override
+        protected boolean strictTransaction(Config params)
+        {
+            if (params.getOptional("strict_transaction", Boolean.class).isPresent()) {
+                // RedShift doesn't support "SELECT FOR UPDATE" statement
+                logger.warn("'strict_transaction' is ignored in 'redshift' operator");
+            }
+            return false;
         }
     }
 }

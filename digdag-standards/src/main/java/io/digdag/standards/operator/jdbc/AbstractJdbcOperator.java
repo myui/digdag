@@ -57,6 +57,11 @@ public abstract class AbstractJdbcOperator <C>
         return ImmutableList.of(type() + ".*");
     }
 
+    protected boolean strictTransaction(Config params)
+    {
+        return params.get("strict_transaction", Boolean.class, true);
+    }
+
     @Override
     public TaskResult runTask(TaskExecutionContext ctx)
     {
@@ -86,7 +91,7 @@ public abstract class AbstractJdbcOperator <C>
 
         boolean readOnlyMode = downloadFile.isPresent();  // or store_last_results == true
 
-        boolean strictTransaction = params.get("strict_transaction", Boolean.class, true);
+        boolean strictTransaction = strictTransaction(params);
 
         String statusTableName;
         DurationParam statusTableCleanupDuration;
