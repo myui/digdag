@@ -29,7 +29,8 @@ import static org.postgresql.core.Utils.escapeIdentifier;
 public class RedshiftConnection
     extends PgConnection
 {
-    static RedshiftConnection open(RedshiftConnectionConfig config)
+    @VisibleForTesting
+    public static RedshiftConnection open(RedshiftConnectionConfig config)
     {
         return new RedshiftConnection(config.openConnection());
     }

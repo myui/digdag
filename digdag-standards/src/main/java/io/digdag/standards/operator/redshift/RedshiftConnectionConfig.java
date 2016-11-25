@@ -17,11 +17,10 @@ import java.util.Properties;
 public abstract class RedshiftConnectionConfig
     extends AbstractJdbcConnectionConfig
 {
-    // Note default port is different from postgresql.
-
     public abstract Optional<String> schema();
 
-    static RedshiftConnectionConfig configure(SecretProvider secrets, Config params)
+    @VisibleForTesting
+    public static RedshiftConnectionConfig configure(SecretProvider secrets, Config params)
     {
         return ImmutableRedshiftConnectionConfig.builder()
                 .host(secrets.getSecretOptional("host").or(() -> params.get("host", String.class)))
