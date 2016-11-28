@@ -30,7 +30,7 @@ import static utils.TestUtils.*;
 
 public class RedshiftIT
 {
-    private static final String REDSHIFT_CONFIG = System.getenv("REDSHIFT_CONFIG");
+    private static final String REDSHIFT_CONFIG = System.getenv("REDSHIFT_IT_CONFIG");
     private static final String RESTRICTED_USER = "not_admin";
     private static final String SRC_TABLE = "src_tbl";
     private static final String DEST_TABLE = "dest_tbl";
