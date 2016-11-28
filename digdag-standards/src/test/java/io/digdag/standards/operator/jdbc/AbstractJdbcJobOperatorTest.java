@@ -37,7 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
-public class AbstractJdbcOperatorTest
+public class AbstractJdbcJobOperatorTest
 {
     @Mock TaskExecutionContext taskExecutionContext;
 
@@ -78,10 +78,10 @@ public class AbstractJdbcOperatorTest
         }
     }
 
-    public static class TestOperator
-        extends AbstractJdbcOperator<TestConnectionConfig>
+    public static class TestJobOperator
+        extends AbstractJdbcJobOperator<TestConnectionConfig>
     {
-        public TestOperator(Path workspacePath, TaskRequest request, TemplateEngine templateEngine)
+        public TestJobOperator(Path workspacePath, TaskRequest request, TemplateEngine templateEngine)
         {
             super(workspacePath, request, templateEngine);
         }
@@ -105,18 +105,18 @@ public class AbstractJdbcOperatorTest
         }
     }
 
-    private TestOperator getJdbcOperator(Map<String, Object> configInput, Optional<Map<String, Object>> lastState)
+    private TestJobOperator getJdbcOperator(Map<String, Object> configInput, Optional<Map<String, Object>> lastState)
             throws IOException
     {
         TaskRequest taskRequest = testHelper.createTaskRequest(configInput, lastState);
         TemplateEngine templateEngine = testHelper.injector().getInstance(TemplateEngine.class);
-        return Mockito.spy(new TestOperator(testHelper.projectPath(), taskRequest, templateEngine));
+        return Mockito.spy(new TestJobOperator(testHelper.projectPath(), taskRequest, templateEngine));
     }
 
     private void runTaskReadOnly(Map<String, Object> configInput, String sql)
             throws IOException, NotReadOnlyException
     {
-        TestOperator operator = getJdbcOperator(configInput, Optional.absent());
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.absent());
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -130,7 +130,7 @@ public class AbstractJdbcOperatorTest
     private UUID runTaskWithoutQueryId(Map<String, Object> configInput)
             throws IOException
     {
-        TestOperator operator = getJdbcOperator(configInput, Optional.absent());
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.absent());
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -148,7 +148,7 @@ public class AbstractJdbcOperatorTest
         return queryId;
     }
 
-    private void runTaskWithQueryId(TestOperator operator)
+    private void runTaskWithQueryId(TestJobOperator operator)
     {
         TaskResult taskResult = operator.runTask(taskExecutionContext);
         assertThat(taskResult, is(notNullValue()));
@@ -188,7 +188,7 @@ public class AbstractJdbcOperatorTest
         UUID queryId = runTaskWithoutQueryId(configInput);
 
         // Next, executes the query and updates statuses
-        TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -222,7 +222,7 @@ public class AbstractJdbcOperatorTest
         UUID queryId = runTaskWithoutQueryId(configInput);
 
         // Next, executes the query and updates statuses
-        TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -256,7 +256,7 @@ public class AbstractJdbcOperatorTest
         UUID queryId = runTaskWithoutQueryId(configInput);
 
         // Next, executes the query and updates statuses
-        TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -285,7 +285,7 @@ public class AbstractJdbcOperatorTest
         UUID queryId = runTaskWithoutQueryId(configInput);
 
         // Next, executes the query and updates statuses
-        TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -320,7 +320,7 @@ public class AbstractJdbcOperatorTest
         UUID queryId = runTaskWithoutQueryId(configInput);
 
         // Next, executes the query and updates statuses
-        TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
+        TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
 
         TestConnection connection = Mockito.mock(TestConnection.class);
         when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -355,7 +355,7 @@ public class AbstractJdbcOperatorTest
 
         // Next, executes the query and updates statuses
         {
-            TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
+            TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId)));
 
             TestConnection connection = Mockito.mock(TestConnection.class);
             when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -374,7 +374,7 @@ public class AbstractJdbcOperatorTest
         }
 
         {
-            TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId, "pollInterval", 2)));
+            TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId, "pollInterval", 2)));
 
             TestConnection connection = Mockito.mock(TestConnection.class);
             when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);
@@ -393,7 +393,7 @@ public class AbstractJdbcOperatorTest
         }
 
         {
-            TestOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId, "pollInterval", 1024)));
+            TestJobOperator operator = getJdbcOperator(configInput, Optional.of(ImmutableMap.of("queryId", queryId, "pollInterval", 1024)));
 
             TestConnection connection = Mockito.mock(TestConnection.class);
             when(operator.connect(any(TestConnectionConfig.class))).thenReturn(connection);

@@ -7,7 +7,8 @@ import io.digdag.spi.OperatorFactory;
 import io.digdag.spi.SecretProvider;
 import io.digdag.spi.TaskRequest;
 import io.digdag.spi.TemplateEngine;
-import io.digdag.standards.operator.jdbc.AbstractJdbcOperator;
+import io.digdag.standards.operator.jdbc.AbstractJdbcJobOperator;
+
 import java.nio.file.Path;
 
 public class PgOperatorFactory
@@ -33,10 +34,10 @@ public class PgOperatorFactory
         return new PgOperator(projectPath, request, templateEngine);
     }
 
-    public static class PgOperator
-        extends AbstractJdbcOperator<PgConnectionConfig>
+    static class PgOperator
+        extends AbstractJdbcJobOperator<PgConnectionConfig>
     {
-        public PgOperator(Path projectPath, TaskRequest request, TemplateEngine templateEngine)
+        PgOperator(Path projectPath, TaskRequest request, TemplateEngine templateEngine)
         {
             super(projectPath, request, templateEngine);
         }
