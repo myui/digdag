@@ -31,6 +31,10 @@ public abstract class AbstractJdbcOperator<C>
 
     protected abstract String type();
 
+    protected boolean strictTransaction(Config params)
+    {
+        return params.get("strict_transaction", Boolean.class, true);
+    }
 
     protected abstract TaskResult run(TaskExecutionContext ctx, Config params, Config state, C connectionConfig);
 
@@ -38,11 +42,6 @@ public abstract class AbstractJdbcOperator<C>
     public List<String> secretSelectors()
     {
         return ImmutableList.of(type() + ".*");
-    }
-
-    protected boolean strictTransaction(Config params)
-    {
-        return params.get("strict_transaction", Boolean.class, true);
     }
 
     @Override

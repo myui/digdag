@@ -42,15 +42,9 @@ public abstract class AbstractJdbcJobOperator<C>
         super(projectPath, request, templateEngine);
     }
 
-    protected boolean strictTransaction(Config params)
-    {
-        return params.get("strict_transaction", Boolean.class, true);
-    }
-
     @Override
     protected TaskResult run(TaskExecutionContext ctx, Config params, Config state, C connectionConfig)
     {
-
         String query = workspace.templateCommand(templateEngine, params, "query", UTF_8);
 
         Optional<TableReference> insertInto = params.getOptional("insert_into", TableReference.class);
