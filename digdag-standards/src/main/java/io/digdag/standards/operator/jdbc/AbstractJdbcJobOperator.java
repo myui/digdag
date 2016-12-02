@@ -2,17 +2,14 @@ package io.digdag.standards.operator.jdbc;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 import io.digdag.client.config.Config;
 import io.digdag.client.config.ConfigElement;
 import io.digdag.client.config.ConfigException;
-import io.digdag.spi.SecretProvider;
 import io.digdag.spi.TaskExecutionContext;
 import io.digdag.spi.TaskExecutionException;
 import io.digdag.spi.TaskRequest;
 import io.digdag.spi.TaskResult;
 import io.digdag.spi.TemplateEngine;
-import io.digdag.util.BaseOperator;
 import io.digdag.util.DurationParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +21,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static io.digdag.spi.TaskExecutionException.buildExceptionErrorConfig;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public abstract class AbstractJdbcJobOperator<C>

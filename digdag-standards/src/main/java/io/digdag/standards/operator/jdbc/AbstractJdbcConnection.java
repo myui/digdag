@@ -1,5 +1,7 @@
 package io.digdag.standards.operator.jdbc;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.regex.Pattern;
 import java.sql.Connection;
@@ -77,8 +79,15 @@ public abstract class AbstractJdbcConnection
     @Override
     public void executeScript(String sql)
     {
+        executeScript(sql, Collections.EMPTY_LIST);
+    }
+
+    @Override
+    public void executeScript(String sql, List<Object> params)
+    {
         try {
-            try (Statement stmt = connection.createStatement()) {
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                setParameters(stmt, params);
                 boolean hasResults = stmt.execute(sql);
                 while (hasResults) {
                     ResultSet rs = stmt.getResultSet();
@@ -93,7 +102,7 @@ public abstract class AbstractJdbcConnection
         }
     }
 
-    protected void skipResultSet(ResultSet rs)
+    private void skipResultSet(ResultSet rs)
         throws SQLException
     {
         while (rs.next())
@@ -103,8 +112,14 @@ public abstract class AbstractJdbcConnection
     @Override
     public void executeUpdate(String sql)
     {
+        executeUpdate(sql, Collections.EMPTY_LIST);
+    }
+
+    @Override
+    public void executeUpdate(String sql, List<Object> params)
+    {
         try {
-            execute(sql);
+            execute(sql, params);
         }
         catch (SQLException ex) {
             throw new DatabaseException("Failed to execute an update statement", ex);
@@ -113,9 +128,16 @@ public abstract class AbstractJdbcConnection
 
     @VisibleForTesting
     public void execute(String sql)
+            throws SQLException
+    {
+        execute(sql, Collections.EMPTY_LIST);
+    }
+
+    public void execute(String sql, List<Object> params)
         throws SQLException
     {
-        try (Statement stmt = connection.createStatement()) {
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            setParameters(stmt, params);
             stmt.executeUpdate(sql);
         }
     }
@@ -143,6 +165,14 @@ public abstract class AbstractJdbcConnection
         }
         catch (SQLException ex) {
             logger.warn("Failed to close a database connection. Ignoring.", ex);
+        }
+    }
+
+    private void setParameters(PreparedStatement stmt, List<Object> params)
+            throws SQLException
+    {
+        for(int i=0; i < params.size(); i++) {
+            stmt.setObject(i+1, params.get(i));
         }
     }
 }

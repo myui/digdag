@@ -1,5 +1,6 @@
 package io.digdag.standards.operator.redshift;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.inject.Inject;
 import io.digdag.client.config.Config;
@@ -13,15 +14,18 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Stream;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static io.digdag.spi.TaskExecutionException.buildExceptionErrorConfig;
 
 public class RedshiftLoadOperatorFactory
         implements OperatorFactory
 {
+    private static final String POLL_INTERVAL = "pollInterval";
+    private static final int INITIAL_POLL_INTERVAL = 1;
+    private static final int MAX_POLL_INTERVAL = 1200;
+
     private static final String OPERATOR_TYPE = "redshift_load";
     private final TemplateEngine templateEngine;
 
@@ -44,8 +48,9 @@ public class RedshiftLoadOperatorFactory
         return new RedshiftLoadOperator(projectPath, request, templateEngine);
     }
 
-    private static class RedshiftLoadOperator
-        extends AbstractJdbcOperator<RedshiftConnectionConfig>
+    @VisibleForTesting
+    static class RedshiftLoadOperator
+        extends AbstractJdbcJobOperator<RedshiftConnectionConfig>
     {
         private final Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -74,26 +79,27 @@ public class RedshiftLoadOperatorFactory
             return OPERATOR_TYPE;
         }
 
-        @Override
-        protected TaskResult run(TaskExecutionContext ctx, Config params, Config state, RedshiftConnectionConfig connectionConfig)
+        @VisibleForTesting
+        static Map.Entry<String, List<Object>> createCopyStatement(Config params, SecretProvider secretProvider)
         {
             /*
-            redshift_load>: dest_table
-            source: s3://mybucket/data/listing/     // i.g. 'emr://j-SAMPLE2B500FC/myoutput/part-*'
-            format: JSON            // Optional (AVRO/CSV/DELIMITER/...)
-            quote_char: "           // Optional (For CSV)
-            delimiter_char: '|'     // Optional (For DELIMITER)
-            fixedwidth_spec: 'colLabel1:colWidth1,colLabel:colWidth2, ...'      // Optional (For FIXEDWIDTH)
-            jsonpaths_file: s3://mybucket/jsonpaths.txt'    // Optional (For AVRO or JSON)
-            compression: LZOP       // Optional (BZIP2/GZIP/LZOP)
-            readratio: 50           // Optional
-            manifest: true          // Optional
-            removequotes: true      // Optional
-            emptyasnull: true       // Optional
-            blanksasnull: true      // Optional
-            maxerror: 5             // Optional
-            timeformat: 'YYYY-MM-DD HH:MI:SS'   // Optional
-            explicit_ids: true      // Optional
+                redshift_load>: dest_table
+                source: s3://mybucket/data/listing/     // i.e. 'emr://j-SAMPLE2B500FC/myoutput/part-*'
+                format: JSON            // i.e. AVRO/CSV/DELIMITER/...
+                quote_char: "           // Optional (For CSV)
+                delimiter_char: '|'     // Optional (For DELIMITER)
+                fixedwidth_spec: 'colLabel1:colWidth1,colLabel:colWidth2, ...'      // Optional (For FIXEDWIDTH)
+                jsonpaths_file: s3://mybucket/jsonpaths.txt'    // Optional (For AVRO or JSON)
+                compression: LZOP       // Optional (BZIP2/GZIP/LZOP)
+                readratio: 50           // Optional
+                manifest: true          // Optional
+                removequotes: true      // Optional
+                emptyasnull: true       // Optional
+                blanksasnull: true      // Optional
+                maxerror: 5             // Optional
+                timeformat: 'YYYY-MM-DD HH:MI:SS'   // Optional
+                explicit_ids: true      // Optional
+                encrypted_data: true    // Optional (This requires "master_symmetric_key" secret)
             */
             String destTable = params.get("_command", String.class);
             String sourceUri = params.get("source", String.class);
@@ -112,14 +118,33 @@ public class RedshiftLoadOperatorFactory
             Optional<String> timeFormat = params.getOptional("time_format", String.class);
             Optional<Boolean> explicitIds = params.getOptional("explicit_ids", Boolean.class);
 
-            SecretProvider awsSecrets = ctx.secrets().getSecrets("aws");
-            SecretProvider s3Secrets = awsSecrets.getSecrets("s3");
+            SecretProvider awsSecrets = secretProvider.getSecrets("aws");
+            SecretProvider redshiftSecrets = awsSecrets.getSecrets("redshift");
+            SecretProvider redshiftLoadSecrets = awsSecrets.getSecrets("redshift_load");
 
-            String accessKey = s3Secrets.getSecretOptional("access-key-id")
-                    .or(() -> awsSecrets.getSecret("access-key-id"));
+            String keyOfAccess = "access-key-id";
+            java.util.Optional<Optional<String>> optAccessKey =
+                    Stream.of(
+                            redshiftLoadSecrets.getSecretOptional(keyOfAccess),
+                            redshiftSecrets.getSecretOptional(keyOfAccess),
+                            awsSecrets.getSecretOptional(keyOfAccess))
+                            .findFirst();
+            if (!optAccessKey.isPresent()) {
+                throw new ConfigException(String.format("'%s' secrets doesn't exist", keyOfAccess));
+            }
+            String accessKey = optAccessKey.get().get();
 
-            String secretKey = s3Secrets.getSecretOptional("secret-access-key")
-                    .or(() -> awsSecrets.getSecret("secret-access-key"));
+            String keyOfSecret = "secret-access-key";
+            java.util.Optional<Optional<String>> optSecretKey =
+                    Stream.of(
+                            redshiftLoadSecrets.getSecretOptional(keyOfSecret),
+                            redshiftSecrets.getSecretOptional(keyOfSecret),
+                            awsSecrets.getSecretOptional(keyOfSecret))
+                    .findFirst();
+            if (!optSecretKey.isPresent()) {
+                throw new ConfigException(String.format("'%s' secrets doesn't exist", keyOfSecret));
+            }
+            String secretKey = optSecretKey.get().get();
 
             List<Object> paramsInSql = new ArrayList<>();
             StringBuilder sb = new StringBuilder();
@@ -203,24 +228,31 @@ public class RedshiftLoadOperatorFactory
             if (explicitIds.isPresent()) {
                 sb.append("explicit_ids\n");
             }
-
-            String query = sb.toString();
-
-        boolean strictTransaction = strictTransaction(params);
-
-        String statusTableName;
-        DurationParam statusTableCleanupDuration;
-        if (strictTransaction) {
-            statusTableName = params.get("status_table", String.class, "__digdag_status");
-            statusTableCleanupDuration = params.get("status_table_cleanup", DurationParam.class,
-                    DurationParam.of(Duration.ofHours(24)));
-        }
-        else {
-            statusTableName = null;
-            statusTableCleanupDuration = null;
+            return new AbstractMap.SimpleImmutableEntry<>(sb.toString(), paramsInSql);
         }
 
-        UUID queryId;
+        @Override
+        protected TaskResult run(TaskExecutionContext ctx, Config params, Config state, RedshiftConnectionConfig connectionConfig)
+        {
+            Map.Entry<String, List<Object>> copyStatement = createCopyStatement(params, ctx.secrets());
+            String query = copyStatement.getKey();
+            List<Object> paramsInSql = copyStatement.getValue();
+
+            boolean strictTransaction = strictTransaction(params);
+
+            String statusTableName;
+            DurationParam statusTableCleanupDuration;
+            if (strictTransaction) {
+                statusTableName = params.get("status_table", String.class, "__digdag_status");
+                statusTableCleanupDuration = params.get("status_table_cleanup", DurationParam.class,
+                        DurationParam.of(Duration.ofHours(24)));
+            }
+            else {
+                statusTableName = null;
+                statusTableCleanupDuration = null;
+            }
+
+            UUID queryId;
             // generate query id
             if (!state.has(QUERY_ID)) {
                 // this is the first execution of this task
@@ -231,22 +263,11 @@ public class RedshiftLoadOperatorFactory
             }
             queryId = state.get(QUERY_ID, UUID.class);
 
-        try (JdbcConnection connection = connect(connectionConfig)) {
-            Exception statementError = connection.validateStatement(query);
-            if (statementError != null) {
-                throw new ConfigException("Given query is invalid", statementError);
-            }
-
-                String statement;
-                boolean statementMayReturnResults;
-            statement = connection.buildInsertStatement(query, insertInto.get());
-
-                    Exception modifiedStatementError = connection.validateStatement(statement);
-                    if (modifiedStatementError != null) {
-                        throw new ConfigException("Given query is valid but failed to build INSERT INTO statement (this may happen if given query includes multiple statements or semicolon \";\"?)", modifiedStatementError);
-                    }
-                    statementMayReturnResults = false;
-                    logger.debug("Running a modified statement: {}", statement);
+            try (JdbcConnection connection = connect(connectionConfig)) {
+                Exception statementError = connection.validateStatement(query);
+                if (statementError != null) {
+                    throw new ConfigException("Given query is invalid", statementError);
+                }
 
                 TransactionHelper txHelper;
                 if (strictTransaction) {
@@ -260,7 +281,7 @@ public class RedshiftLoadOperatorFactory
                 txHelper.prepare();
 
                 boolean executed = txHelper.lockedTransaction(queryId, () -> {
-                    connection.executeUpdate(statement);
+                    connection.executeUpdate(query, paramsInSql);
                 });
 
                 if (!executed) {
@@ -275,22 +296,18 @@ public class RedshiftLoadOperatorFactory
                 }
 
                 return TaskResult.defaultBuilder(request).build();
-        }
-        catch (NotReadOnlyException ex) {
-            throw new ConfigException("Query must be read-only if download_file is set", ex.getCause());
-        }
-        catch (LockConflictException ex) {
-            int pollingInterval = state.get(POLL_INTERVAL, Integer.class, INITIAL_POLL_INTERVAL);
-            // Set next interval for exponential backoff
-            state.set(POLL_INTERVAL, Math.min(pollingInterval * 2, MAX_POLL_INTERVAL));
-            throw TaskExecutionException.ofNextPolling(pollingInterval, ConfigElement.copyOf(state));
-        }
-        catch (DatabaseException ex) {
-            // expected error that should suppress stacktrace by default
-            String message = String.format("%s [%s]", ex.getMessage(), ex.getCause().getMessage());
-            throw new TaskExecutionException(message, buildExceptionErrorConfig(ex));
-        }
-            return null;
+            }
+            catch (LockConflictException ex) {
+                int pollingInterval = state.get(POLL_INTERVAL, Integer.class, INITIAL_POLL_INTERVAL);
+                // Set next interval for exponential backoff
+                state.set(POLL_INTERVAL, Math.min(pollingInterval * 2, MAX_POLL_INTERVAL));
+                throw TaskExecutionException.ofNextPolling(pollingInterval, ConfigElement.copyOf(state));
+            }
+            catch (DatabaseException ex) {
+                // expected error that should suppress stacktrace by default
+                String message = String.format("%s [%s]", ex.getMessage(), ex.getCause().getMessage());
+                throw new TaskExecutionException(message, buildExceptionErrorConfig(ex));
+            }
         }
     }
 }

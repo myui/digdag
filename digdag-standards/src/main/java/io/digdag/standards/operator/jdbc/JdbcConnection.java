@@ -1,6 +1,7 @@
 package io.digdag.standards.operator.jdbc;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.function.Consumer;
 
 public interface JdbcConnection
@@ -14,7 +15,11 @@ public interface JdbcConnection
 
     void executeScript(String sql);
 
+    void executeScript(String sql, List<Object> params);
+
     void executeUpdate(String sql);
+
+    void executeUpdate(String sql, List<Object> params);
 
     void executeReadOnlyQuery(String sql, Consumer<JdbcResultSet> resultHandler)
         throws NotReadOnlyException;
